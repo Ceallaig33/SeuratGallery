@@ -3,35 +3,41 @@ library(Seurat)
 library(dplyr)
 library(Matrix)
 
+# demoset downloaded from https://www.dropbox.com/s/63gnlw45jf7cje8/pbmc3k_final.rds?dl=0
+# Full details at https://satijalab.org/seurat/vignettes.html
+
 
 ui <- fluidPage(
-  titlePanel("Seurat Gallery"),
+  titlePanel("SeuratGallery"),
   fluidRow(
     column(3, 
-      wellPanel(
-        fileInput(inputId="file_name", label="Select Saved Seurat Object File"),
-        radioButtons(inputId = "labelBoolean", label="Display labels?", choices = c("TRUE","FALSE"), selected="TRUE"),
-        radioButtons(inputId = "legendBoolean", label="Hide legend?", choices = c("TRUE","FALSE"), selected="FALSE"),
-        tags$hr(),
-        sliderInput(inputId = "dotSize", label = "Set point size", value=1, min=0.01, max=10),
-        sliderInput(inputId = "labelSize", label = "Set label size", value=4, min=0.5, max=10)
-      ),
-      wellPanel(
-        textInput(inputId = "geneName", label="Enter Gene Name", value="Actb"),
-        actionButton("goButton", "Plot Gene")
-      )
+           wellPanel(
+             fileInput(inputId="file_name", label="Select Saved Seurat Object File"),
+             radioButtons(inputId = "labelBoolean", label="Display labels?", choices = c("TRUE","FALSE"), selected="TRUE"),
+             radioButtons(inputId = "legendBoolean", label="Hide legend?", choices = c("TRUE","FALSE"), selected="FALSE"),
+             tags$hr(),
+             sliderInput(inputId = "dotSize", label = "Set point size", value=1, min=0.01, max=10),
+             sliderInput(inputId = "labelSize", label = "Set label size", value=4, min=0.5, max=10)
+           ),
+           wellPanel(
+             textInput(inputId = "geneName", label="Enter Gene Name", value="ACTB"),
+             actionButton("goButton", "Plot Gene")
+           )
+           
     ),
     column(9,
-      verbatimTextOutput("console1"),
-      plotOutput("TSNE"),
-      tags$hr(),
-      tabsetPanel(
-        tabPanel("TSNE", plotOutput("featureTSNE")),
-        tabPanel("Violins", plotOutput("vlnPlot"))
-      )
+           verbatimTextOutput("console1"),
+           plotOutput("UMAP"),
+           tags$hr(),
+           tabsetPanel(
+             tabPanel("UMAP", plotOutput("featureUMAP")),
+             tabPanel("Violins", plotOutput("vlnPlot"))
+           )
+           
     )
   )
 )
+
 
 
 server <- function(input, output) {
@@ -40,66 +46,45 @@ server <- function(input, output) {
   options(shiny.maxRequestSize=1000*1024^2)
   
   # set demo dataset file here
-  demo = "pancreas.Rda"
+  demo = "pbmc3k_final.rds"
   
   SeuratObject <- reactive({
     if(is.null(input$file_name)){
       # Load a default demo dataset
-      load(file=demo)
+      return(readRDS(demo))
     } else {
       # Load user-defined dataset
-      load(input$file_name$datapath)
+      return(readRDS(input$file_name$datapath))
     }
   })
-
-  output$contents <- renderText({
-    if (!is.null(input$file_name)){
-      "Currently displaying 8.5k Pancreas dataset as demo"
-    } else {
-      load(file=inFile$name)
-    }
-  })
+  
   
   output$console1 <- renderPrint({
-    if (is.null(input$file_name)){
-      get(load(demo))
-    } else {
-      # should be a more elegant way of doing this, but this works...
-      get(load(input$file_name$name))
-    }
+    sce <- SeuratObject()
+    sce
+    
   })
   
-  # Display TSNE Plot as overview toggled options for display legends/labels and setting size. Default displays demo dataset
-  output$TSNE <- renderPlot({
-    if (is.null(input$file_name)){
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    TSNEPlot(get(SeuratObject()), do.label = input$labelBoolean, pt.size = input$dotSize, label.size = input$labelSize, no.legend=input$legendBoolean)
+  # Display UMAP Plot as overview toggled options for display legends/labels and setting size. Default displays demo dataset
+  output$UMAP <- renderPlot({
+    DimPlot(SeuratObject(), reduction = 'umap', label = input$labelBoolean,
+            pt.size = input$dotSize, label.size = input$labelSize, no.legend=input$legendBoolean)
   })
   
   fPlot <- eventReactive(input$goButton, {
-    if (is.null(input$file_name)){ 
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    FeaturePlot(get(SeuratObject()), input$geneName,pt.size = input$dotSize)
+    cols_use = viridis(n=100,option = "A", direction = -1)
+    FeaturePlot(object = SeuratObject(),reduction = 'umap', features=input$geneName,
+                pt.size = input$dotSize, cols = cols_use)
   })
   
   vPlot <- eventReactive(input$goButton, {
-    if (is.null(input$file_name)){ 
-      load(file=demo)
-    } else {
-      load(input$file_name$datapath)
-    }
-    VlnPlot(get(SeuratObject()), features.plot = input$geneName, size.x.use = NULLbo)
+    VlnPlot(object = SeuratObject(),features =  input$geneName, size.x.use = NULL)
   })
   
-  output$featureTSNE <- renderPlot(fPlot())
+  output$featureUMAP <- renderPlot(fPlot())
   output$vlnPlot <- renderPlot(vPlot())
   
 }
-  
+
 shinyApp(ui = ui, server = server)
+
